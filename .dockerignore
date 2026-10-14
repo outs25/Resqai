@@ -1,0 +1,11 @@
+Dockerfile
+.dockerignore
+node_modules
+.next
+.git
+.gitignore
+.env*.local
+README.md
+scripts
+stitch_extracted
+stitch_resqai_emergency_coordination_platform.zip
