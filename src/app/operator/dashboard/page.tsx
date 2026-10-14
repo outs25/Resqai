@@ -1,12 +1,27 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { OperatorNavbar } from '@/components/operator/OperatorNavbar';
 import { OperatorSidebar } from '@/components/operator/OperatorSidebar';
 import { PriorityQueue } from '@/components/operator/PriorityQueue';
-import { LiveIncidentMap } from '@/components/operator/LiveIncidentMap';
 import { DemoController } from '@/components/operator/DemoController';
 import { Incident, Resource, Hospital } from '@/types/incident';
+
+const LiveIncidentMap = dynamic(
+  () => import('@/components/operator/LiveIncidentMap').then((mod) => mod.LiveIncidentMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="relative w-full h-full min-h-[500px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#0d0f12] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+          <span className="text-xs font-mono text-slate-400">Loading Tactical GIS Telemetry...</span>
+        </div>
+      </div>
+    ),
+  }
+);
 import {
   ShieldAlert,
   Flame,

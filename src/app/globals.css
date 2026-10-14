@@ -1,3 +1,5 @@
+@import 'leaflet/dist/leaflet.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -112,24 +114,45 @@
   animation: pulseGlow 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
 }
 
-/* Leaflet Map Light Tile Styling */
+/* Leaflet Map Styling (Robust Across Deployment & Dark/Light Modes) */
 .leaflet-container {
-  width: 100%;
-  height: 100%;
-  background: #f1f3fc !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100% !important;
   font-family: inherit;
   z-index: 10;
   border-radius: 0.75rem;
+  background: #0d0f12 !important;
+}
+
+/* Light mode override for citizen location picker */
+.light-map .leaflet-container {
+  background: #f1f3fc !important;
+}
+
+/* Dark mode invert filter for fallback OpenStreetMap tiles */
+.dark-tiles-filter {
+  filter: brightness(0.65) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
 }
 
 .leaflet-popup-content-wrapper {
+  background: #181c23 !important;
+  color: #f8fafc !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6) !important;
+}
+
+.light-map .leaflet-popup-content-wrapper {
   background: #ffffff !important;
   color: #181c22 !important;
   border: 1px solid rgba(224, 226, 235, 0.9) !important;
-  border-radius: 0.75rem !important;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
 }
 
 .leaflet-popup-tip {
+  background: #181c23 !important;
+}
+
+.light-map .leaflet-popup-tip {
   background: #ffffff !important;
 }

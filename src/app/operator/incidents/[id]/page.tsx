@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { OperatorNavbar } from '@/components/operator/OperatorNavbar';
 import { OperatorSidebar } from '@/components/operator/OperatorSidebar';
 import { AIAssessmentCard } from '@/components/operator/AIAssessmentCard';
@@ -10,9 +11,13 @@ import { ResourceDispatchModal } from '@/components/operator/ResourceDispatchMod
 import { HospitalRecommendationCard } from '@/components/operator/HospitalRecommendationCard';
 import { IncidentTimelineView } from '@/components/operator/IncidentTimelineView';
 import { ResolveIncidentModal } from '@/components/operator/ResolveIncidentModal';
-import { LiveIncidentMap } from '@/components/operator/LiveIncidentMap';
 import { DemoController } from '@/components/operator/DemoController';
 import { Incident, Report } from '@/types/incident';
+
+const LiveIncidentMap = dynamic(
+  () => import('@/components/operator/LiveIncidentMap').then((mod) => mod.LiveIncidentMap),
+  { ssr: false }
+);
 import { getSeverityBadgeColor, getStatusBadgeColor, formatTimeAgo } from '@/lib/utils';
 import {
   ArrowLeft,

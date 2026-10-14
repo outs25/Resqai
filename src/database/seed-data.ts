@@ -3,8 +3,8 @@ import { Incident, Resource, Hospital, Operator, Report, IncidentTimeline, AIAss
 export const INITIAL_OPERATORS: Operator[] = [
   {
     id: 'op-001',
-    email: 'sarah.chen@resq.gov',
-    name: 'Cmdr. Sarah Chen',
+    email: 'outs.chen@resq.gov',
+    name: 'Cmdr. outs',
     role: 'COMMANDER',
     organization: 'Metropolitan Emergency Command (Sector 4)',
     created_at: '2026-01-15T08:00:00Z',

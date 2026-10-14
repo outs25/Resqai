@@ -1,11 +1,16 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { OperatorNavbar } from '@/components/operator/OperatorNavbar';
 import { OperatorSidebar } from '@/components/operator/OperatorSidebar';
 import { DemoController } from '@/components/operator/DemoController';
-import { LiveIncidentMap } from '@/components/operator/LiveIncidentMap';
 import { Resource } from '@/types/incident';
+
+const LiveIncidentMap = dynamic(
+  () => import('@/components/operator/LiveIncidentMap').then((mod) => mod.LiveIncidentMap),
+  { ssr: false }
+);
 import {
   Truck,
   Flame,

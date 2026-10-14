@@ -168,8 +168,15 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
 
         miniMapInstanceRef.current = map;
         miniMarkerRef.current = marker;
+
+        setTimeout(() => {
+          if (miniMapInstanceRef.current) {
+            miniMapInstanceRef.current.invalidateSize();
+          }
+        }, 150);
       } else {
         miniMapInstanceRef.current.setView([currentLat, currentLon], 15);
+        miniMapInstanceRef.current.invalidateSize();
         if (miniMarkerRef.current) {
           miniMarkerRef.current.setLatLng([currentLat, currentLon]);
         }
@@ -178,6 +185,12 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
 
     return () => {
       isMounted = false;
+      if (miniMapInstanceRef.current) {
+        try {
+          miniMapInstanceRef.current.remove();
+        } catch {}
+        miniMapInstanceRef.current = null;
+      }
     };
   }, [showInteractiveMap, latitude, longitude]);
 
@@ -278,7 +291,7 @@ export const LocationPicker: React.FC<LocationPickerProps> = ({
 
         {/* Interactive Leaflet Mini-Map */}
         {showInteractiveMap && (
-          <div className="w-full h-44 rounded-lg overflow-hidden border border-surface-container-highest mt-2 relative">
+          <div className="w-full h-44 rounded-lg overflow-hidden border border-surface-container-highest mt-2 relative light-map">
             <div ref={miniMapContainerRef} className="w-full h-full" />
           </div>
         )}

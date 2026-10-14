@@ -2,8 +2,6 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { Incident, Resource, Hospital } from '@/types/incident';
-import { getSeverityBadgeColor } from '@/lib/utils';
-import { Flame, Car, HeartPulse, Waves, Truck, Building, Navigation, Layers } from 'lucide-react';
 
 interface LiveIncidentMapProps {
   incidents: Incident[];
@@ -27,59 +25,184 @@ export const LiveIncidentMap: React.FC<LiveIncidentMapProps> = ({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
   const markersRef = useRef<{ [key: string]: any }>({});
+  const fallbackLayerRef = useRef<any>(null);
+  const baseLayersRef = useRef<any[]>([]);
   const [mapReady, setMapReady] = useState(false);
   const [activeLayer, setActiveLayer] = useState<'ALL' | 'INCIDENTS' | 'FLEET' | 'HOSPITALS'>('ALL');
+  const [basemapStyle, setBasemapStyle] = useState<'dark' | 'satellite' | 'streets'>('dark');
+
+  const applyBasemap = (type: 'dark' | 'satellite' | 'streets', map: any, L: any) => {
+    if (!map) return;
+    // Remove previous base layers cleanly
+    baseLayersRef.current.forEach((layer) => {
+      try {
+        map.removeLayer(layer);
+      } catch {}
+    });
+    baseLayersRef.current = [];
+
+    const newLayers: any[] = [];
+    if (type === 'dark') {
+      // 100% Free, zero-API-key ESRI World Dark Gray Canvas with high-contrast labels
+      const base = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+        {
+          attribution: '&copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+          maxNativeZoom: 16,
+          maxZoom: 19,
+        }
+      );
+      const labels = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+        {
+          maxNativeZoom: 16,
+          maxZoom: 19,
+        }
+      );
+
+      // Resilient fallback to OpenStreetMap with dark invert filter if ArcGIS ever has network hiccups
+      base.on('tileerror', () => {
+        if (!fallbackLayerRef.current) {
+          console.warn('[LiveIncidentMap] Activating backup dark tile provider');
+          const fallback = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors',
+            maxZoom: 19,
+            className: 'dark-tiles-filter',
+          });
+          fallback.addTo(map);
+          fallbackLayerRef.current = fallback;
+        }
+      });
+
+      base.addTo(map);
+      labels.addTo(map);
+      newLayers.push(base, labels);
+    } else if (type === 'satellite') {
+      // High-resolution ESRI satellite imagery with boundaries & places overlay
+      const sat = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+        {
+          attribution: '&copy; Esri, Maxar, Earthstar Geographics',
+          maxNativeZoom: 18,
+          maxZoom: 19,
+        }
+      );
+      const labels = L.tileLayer(
+        'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+        {
+          maxNativeZoom: 18,
+          maxZoom: 19,
+        }
+      );
+      sat.addTo(map);
+      labels.addTo(map);
+      newLayers.push(sat, labels);
+    } else {
+      // Standard clean OpenStreetMap street view
+      const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19,
+      });
+      osm.addTo(map);
+      newLayers.push(osm);
+    }
+
+    baseLayersRef.current = newLayers;
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined' || !mapContainerRef.current) return;
 
-    // Dynamically load Leaflet on client side
     let isMounted = true;
+    let resizeObserver: ResizeObserver | null = null;
+
     import('leaflet').then((L) => {
       if (!isMounted || !mapContainerRef.current) return;
 
+      // Clean up previous instance if exists on container
+      if ((mapContainerRef.current as any)._leaflet_id) {
+        if (mapInstanceRef.current) {
+          try {
+            mapInstanceRef.current.remove();
+          } catch {}
+          mapInstanceRef.current = null;
+        }
+      }
+
       if (!mapInstanceRef.current) {
+        // Fix Leaflet's default icon paths in webpack/production bundles
+        try {
+          delete (L.Icon.Default.prototype as any)._getIconUrl;
+          L.Icon.Default.mergeOptions({
+            iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+            iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+            shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+          });
+        } catch {}
+
+        const initialCenter = selectedIncident && selectedIncident.latitude && selectedIncident.longitude
+          ? [selectedIncident.latitude, selectedIncident.longitude]
+          : center;
+
         const map = L.map(mapContainerRef.current, {
-          center: selectedIncident ? [selectedIncident.latitude, selectedIncident.longitude] : center,
+          center: initialCenter as [number, number],
           zoom,
           zoomControl: false,
+          trackResize: true,
         });
 
-        // Add Mapbox Dark v11 if token provided, or custom CartoDB Dark Matter tile layer
-        const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-        const tileUrl = mapboxToken && mapboxToken.startsWith('pk.')
-          ? `https://api.mapbox.com/styles/v1/mapbox/dark-v11/tiles/{z}/{x}/{y}?access_token=${mapboxToken}`
-          : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-
-        const tileOptions = mapboxToken && mapboxToken.startsWith('pk.')
-          ? {
-              attribution: '&copy; Mapbox &copy; OpenStreetMap',
-              tileSize: 512,
-              zoomOffset: -1,
-              maxZoom: 19,
-            }
-          : {
-              attribution: '&copy; OpenStreetMap &copy; CARTO',
-              maxZoom: 19,
-              subdomains: 'abcd',
-            };
-
-        L.tileLayer(tileUrl, tileOptions).addTo(map);
+        // 1. Primary Tile Layer: ESRI Tactical Dark Canvas (100% Free, Zero API Key Required)
+        applyBasemap(basemapStyle, map, L);
 
         L.control.zoom({ position: 'topright' }).addTo(map);
         mapInstanceRef.current = map;
         setMapReady(true);
+
+        // Force viewport recalculation for Next.js production flex/grid layouts
+        const invalidate = () => {
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.invalidateSize();
+          }
+        };
+
+        setTimeout(invalidate, 100);
+        setTimeout(invalidate, 300);
+        setTimeout(invalidate, 800);
+
+        // Watch container resize events
+        if (typeof ResizeObserver !== 'undefined' && mapContainerRef.current) {
+          resizeObserver = new ResizeObserver(() => {
+            invalidate();
+          });
+          resizeObserver.observe(mapContainerRef.current);
+        }
       }
     });
 
     return () => {
       isMounted = false;
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
       if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
+        try {
+          mapInstanceRef.current.remove();
+        } catch {}
         mapInstanceRef.current = null;
       }
+      baseLayersRef.current = [];
     };
   }, []);
+
+  // Watch basemapStyle changes and switch tiles dynamically
+  useEffect(() => {
+    if (!mapReady || !mapInstanceRef.current) return;
+    import('leaflet').then((L) => {
+      if (mapInstanceRef.current) {
+        applyBasemap(basemapStyle, mapInstanceRef.current, L);
+      }
+    });
+  }, [basemapStyle, mapReady]);
 
   const lastFlownIncidentIdRef = useRef<string | null>(null);
   const hasInitialFittedRef = useRef<boolean>(false);
@@ -91,6 +214,9 @@ export const LiveIncidentMap: React.FC<LiveIncidentMapProps> = ({
     import('leaflet').then((L) => {
       const map = mapInstanceRef.current;
       if (!map) return;
+
+      // Invalidate size in case parent container size updated
+      map.invalidateSize();
 
       // Clear existing markers
       Object.values(markersRef.current).forEach((marker: any) => marker.remove());
@@ -255,6 +381,7 @@ export const LiveIncidentMap: React.FC<LiveIncidentMapProps> = ({
     if (!mapReady || !mapInstanceRef.current) return;
     import('leaflet').then((L) => {
       const map = mapInstanceRef.current;
+      map.invalidateSize();
       const validIncidents = incidents.filter((i) => i.latitude && i.longitude);
       if (validIncidents.length > 0) {
         const bounds = L.latLngBounds(validIncidents.map((i) => [i.latitude, i.longitude]));
@@ -266,9 +393,13 @@ export const LiveIncidentMap: React.FC<LiveIncidentMapProps> = ({
   };
 
   return (
-    <div className="relative w-full h-full min-h-[420px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#0d0f12]">
-      {/* Map Container */}
-      <div ref={mapContainerRef} className="w-full h-full" />
+    <div className="relative w-full h-full min-h-[500px] rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#0d0f12]">
+      {/* Map Container: absolute inset-0 guarantees positive height in all CSS flex/grid contexts */}
+      <div
+        ref={mapContainerRef}
+        className="absolute inset-0 w-full h-full"
+        style={{ width: '100%', height: '100%', minHeight: '500px' }}
+      />
 
       {/* Layer Filter Controls Overlay */}
       <div className="absolute top-4 left-4 z-20 flex items-center gap-1.5 p-1.5 rounded-xl bg-[#12151a]/90 backdrop-blur-md border border-white/10 shadow-xl flex-wrap">
@@ -316,6 +447,43 @@ export const LiveIncidentMap: React.FC<LiveIncidentMapProps> = ({
           title="Recenter map on active incidents"
         >
           <span>🎯 Focus View</span>
+        </button>
+      </div>
+
+      {/* Basemap Style Switcher (Zero-Key ESRI Tactical & OpenStreetMap) */}
+      <div className="absolute bottom-4 left-4 z-20 flex items-center gap-1.5 p-1 rounded-xl bg-[#12151a]/90 backdrop-blur-md border border-white/10 shadow-xl">
+        <span className="px-2 text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">
+          Basemap
+        </span>
+        <button
+          type="button"
+          onClick={() => setBasemapStyle('dark')}
+          className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono transition-colors ${
+            basemapStyle === 'dark' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+          }`}
+          title="Tactical Dark Canvas (ESRI ArcGIS - Zero API key required)"
+        >
+          🌑 Dark
+        </button>
+        <button
+          type="button"
+          onClick={() => setBasemapStyle('satellite')}
+          className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono transition-colors ${
+            basemapStyle === 'satellite' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+          }`}
+          title="Satellite Imagery (ESRI World Imagery - Zero API key required)"
+        >
+          🛰️ Satellite
+        </button>
+        <button
+          type="button"
+          onClick={() => setBasemapStyle('streets')}
+          className={`px-2.5 py-1 rounded-lg text-xs font-bold font-mono transition-colors ${
+            basemapStyle === 'streets' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+          }`}
+          title="Street Map (OpenStreetMap - Zero API key required)"
+        >
+          🗺️ Street
         </button>
       </div>
 
