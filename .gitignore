@@ -13,3 +13,5 @@ out/
 # Other generated files
 dist/
 build/
+
+node_modules/
